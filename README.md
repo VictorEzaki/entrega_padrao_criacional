@@ -140,9 +140,3 @@ No Builder, isso não acontece, pois cada valor é definido por método nomeado:
 .setPagamento("PIX")
 .setEndereco("Rua X")
 ```
-
----
-
-### Conclusão
-
-O Builder é mais adequado porque melhora a organização, legibilidade e manutenção do código, além de reduzir erros comuns ao lidar com objetos complexos e com muitos parâmetros.
