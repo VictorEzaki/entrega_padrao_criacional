@@ -49,7 +49,12 @@ class PedidoBuilder {
     }
 }
 
-// Utilização do Builder
+/*
+|--------------------------------------------------------------------------
+| Código cliente
+|--------------------------------------------------------------------------
+*/
+
 try {
     const pedido = new PedidoBuilder()
         .adicionarItem('Notebook', 1, 3500)

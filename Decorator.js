@@ -55,6 +55,11 @@ class DescontoDecorator extends PagamentoDecorator {
     }
 }
 
+/*
+|--------------------------------------------------------------------------
+| Código cliente
+|--------------------------------------------------------------------------
+*/
 
 const pagamentoPix = new Pix();
 console.log(pagamentoPix.processar(100));
