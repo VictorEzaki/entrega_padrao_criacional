@@ -269,3 +269,116 @@ Por exemplo, a tela administrativa não precisa saber como cancelar um pedido. E
 Cada ação poderia ser representada por um comando e colocada em uma fila. Essa fila poderia ficar em memória, no banco de dados ou em uma ferramenta de mensageria.
 
 Depois, um worker buscaria os comandos pendentes e chamaria executar() em cada um deles. Isso permitiria processar tarefas em segundo plano, reexecutar ações em caso de falha e registrar auditoria de tudo que foi processado.
+
+## Adapter
+Arquivo:
+- Adapter.js
+
+# Como executar
+
+```bash
+node Adapter.js
+```
+
+O padrão Adapter permite que duas interfaces incompatíveis trabalhem juntas sem que nenhum dos dois lados precise ser alterado. Neste exemplo, o e-commerce usa a interface `Pagamento` com o método `processar(valor)`, mas o gateway de terceiros expõe `efetuarCobranca(quantia, moeda)`. O `GatewayAdapter` traduz uma chamada na outra, tornando o legado transparente para o restante do sistema.
+
+### O que foi implementado
+- Interface `Pagamento` (reutilizada da Atividade 03)
+- `GatewayLegado` — API de terceiros com método diferente (não alterada)
+- `GatewayAdapter` — implementa `Pagamento` e adapta a chamada para o legado
+- `Pedido` chama apenas `pagamento.processar(valor)`, sem saber que existe um gateway legado por trás
+
+## Sem o Adapter, o que você teria que fazer para integrar o gateway legado? Como o Adapter preserva o princípio Open/Closed?
+
+Sem o Adapter, existiriam basicamente duas saídas, e nenhuma delas é boa.
+
+A primeira seria alterar o `GatewayLegado` para que ele implemente a interface `Pagamento`. Isso não é permitido quando se trata de código de terceiros e, mesmo quando possível, viola o contrato original da classe.
+
+A segunda seria modificar cada ponto do sistema que chama `processar(valor)` para, no caso do gateway legado, chamar `efetuarCobranca(quantia, moeda)` diretamente. Isso espalharia o conhecimento sobre o legado por todo o código cliente, criando um acoplamento forte. Cada vez que a API do gateway mudasse, seria necessário rastrear e corrigir todos esses pontos.
+
+O Adapter preserva o Open/Closed Principle porque o sistema fica **aberto para integrar novos gateways** simplesmente criando um novo adapter, e **fechado para modificação** no código cliente e nas classes existentes. A classe `Pedido` nunca precisa ser tocada: ela sempre chama `processar(valor)` independentemente de quantos gateways diferentes existam por baixo. O adapter é o único ponto de tradução, isolado e substituível.
+
+---
+
+## Facade
+Arquivo:
+- Facade.js
+
+# Como executar
+
+```bash
+node Facade.js
+```
+
+O padrão Facade fornece uma interface simplificada para um conjunto de subsistemas mais complexos. Neste exemplo, a finalização de um pedido envolve quatro subsistemas independentes: verificação de estoque, processamento de pagamento, atualização do carrinho e envio de e-mail. A `CheckoutFacade` orquestra todos eles por trás de um único método `finalizar(pedido)`.
+
+### O que foi implementado
+- Subsistemas stub: `EstoqueService`, `PagamentoService`, `CarrinhoService`, `EmailService`
+- `CheckoutFacade` com método `finalizar(pedido)` que orquestra todos os subsistemas em sequência
+- Controller (código cliente) que chama apenas `facade.finalizar(pedido)`, sem contato direto com nenhum subsistema
+
+## O que aconteceria com o controller se a Facade não existisse e um subsistema mudasse sua API? Como a Facade protege o código cliente de mudanças internas?
+
+Sem a Facade, o controller precisaria conhecer e chamar cada subsistema diretamente:
+
+```javascript
+// Sem Facade — controller acoplado a todos os subsistemas
+estoqueService.verificar(pedido);
+pagamentoService.processar(pedido);
+carrinhoService.limpar(pedido);
+emailService.enviarConfirmacao(pedido);
+```
+
+Se o `EmailService` mudasse o nome do método de `enviarConfirmacao` para `disparar`, ou se o `PagamentoService` passasse a exigir um segundo parâmetro, o controller teria que ser alterado. Agora imagine isso multiplicado por todos os controllers que fazem checkout: a mudança em um subsistema se propagaria por todo o código cliente.
+
+A Facade protege o cliente criando uma camada de indireção. Quando um subsistema muda internamente, apenas a `CheckoutFacade` precisa ser atualizada para absorver essa mudança. O controller continua chamando `facade.finalizar(pedido)` da mesma forma que antes. Isso reduz o acoplamento, centraliza a lógica de orquestração e facilita testes, já que o controller pode ser testado com uma Facade substituta sem precisar subir nenhum subsistema real.
+
+---
+
+## Observer
+Arquivo:
+- Observer.js
+
+# Como executar
+
+```bash
+node Observer.js
+```
+
+O padrão Observer define uma dependência de um-para-muitos entre objetos: quando o estado de um objeto muda, todos os seus dependentes são notificados automaticamente. Neste exemplo, ao confirmar um pedido, a classe `Pedido` notifica todos os observers registrados sem saber quem são eles ou o que fazem.
+
+### O que foi implementado
+- Interface `Observer` com método `atualizar(pedido)`
+- Classe `Pedido` com lista interna de observers, métodos `registrar()`, `remover()` e `notificar()`
+- Três implementações: `EmailObserver`, `EstoqueObserver`, `LogObserver`
+- Demonstração de registro, disparo e remoção dinâmica de observers
+
+## O que muda no código quando você precisa adicionar um novo observer (ex: SMS)? Compare com uma implementação sem o padrão, onde Pedido chamaria cada serviço diretamente.
+
+Com o Observer, adicionar um `SmsObserver` exige apenas criar a nova classe e registrá-la no pedido:
+
+```javascript
+class SmsObserver extends Observer {
+    atualizar(pedido) {
+        console.log(`[SMS] Mensagem enviada ao cliente — Pedido #${pedido.id} confirmado.`);
+    }
+}
+
+pedido.registrar(new SmsObserver());
+```
+
+A classe `Pedido` não é tocada. Ela não sabe quantos observers existem nem o que cada um faz. Isso respeita diretamente o Open/Closed Principle: o sistema está aberto para receber novos comportamentos sem modificar o que já funciona.
+
+Sem o padrão, `Pedido` chamaria cada serviço de forma explícita dentro do método `confirmar()`:
+
+```javascript
+confirmar() {
+    this.status = 'confirmado';
+    emailService.enviar(this);
+    estoqueService.baixar(this);
+    logService.registrar(this);
+    // Para adicionar SMS: smsService.enviar(this) — modifica Pedido
+}
+```
+
+Cada novo serviço exige abrir a classe `Pedido` e adicionar mais uma linha. Com o tempo, `Pedido` acumula dependências de serviços que não são responsabilidade dela: sabe sobre e-mail, estoque, log, SMS. O acoplamento cresce junto com o sistema. Com o Observer, `Pedido` delega tudo para a lista de observers e nunca precisa ser modificada para suportar novos comportamentos de notificação.
